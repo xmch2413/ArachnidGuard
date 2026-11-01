@@ -1,0 +1,56 @@
+buildscript {
+    repositories { maven { url = 'https://maven.minecraftforge.net/' }; maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }; mavenCentral() }
+    dependencies { classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT' }
+}
+plugins {
+    id 'java'
+    id 'net.minecraftforge.gradle' version '6.0.54'
+}
+apply plugin: 'org.spongepowered.mixin'
+version = '1.0.0'
+group = 'local.arachnidguard'
+base { archivesName = 'arachnidguard-forge-1.20.1' }
+java.toolchain.languageVersion = JavaLanguageVersion.of(17)
+minecraft {
+    mappings channel: 'official', version: '1.20.1'
+    runs {
+        configureEach {
+            workingDirectory project.file('run')
+            property 'forge.logging.console.level', 'info'
+            mods { arachnidguard { source sourceSets.main } }
+        }
+        server { args '--nogui' }
+        gameTestServer { property 'forge.enabledGameTestNamespaces', 'arachnidguard' }
+    }
+}
+repositories { maven { url = 'https://maven.minecraftforge.net/' }; maven { url = 'https://repo.spongepowered.org/repository/maven-public/' }; mavenCentral() }
+dependencies {
+    minecraft 'net.minecraftforge:forge:1.20.1-47.4.20'
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+// Optional local compatibility fixtures. Never bundled into the release mod.
+if (project.hasProperty('compatMods')) {
+    minecraft.runs.gameTestServer.property 'arachnidguard.compat', 'true'
+    repositories { flatDir { dirs project.property('compatMods') } }
+    fileTree(project.property('compatMods')).matching { include '*.jar' }.files.each { jarFile ->
+        dependencies { runtimeOnly fg.deobf("local.compat:${jarFile.name[0..-5]}:1") }
+    }
+}
+mixin {
+    add sourceSets.main, 'arachnidguard.refmap.json'
+    config 'arachnidguard.mixins.json'
+}
+tasks.named('jar', Jar).configure {
+    from('LICENSE')
+    manifest { attributes 'MixinConfigs': 'arachnidguard.mixins.json', 'Implementation-Version': project.version }
+    finalizedBy 'reobfJar'
+}
+tasks.withType(JavaCompile).configureEach { options.encoding = 'UTF-8' }
+sourceSets {
+    gametest {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath
+        runtimeClasspath += sourceSets.main.output + sourceSets.main.runtimeClasspath
+    }
+}
+minecraft.runs.gameTestServer.mods { arachnidguard { source sourceSets.gametest } }
+tasks.matching { it.name == 'runGameTestServer' }.configureEach { dependsOn tasks.named('gametestClasses') }
